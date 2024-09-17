@@ -1,6 +1,8 @@
 package com.luyouxiao.mianshixing.model.vo;
 
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.luyouxiao.mianshixing.model.entity.Question;
 import com.luyouxiao.mianshixing.model.entity.QuestionBank;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
@@ -55,6 +57,11 @@ public class QuestionBankVO implements Serializable {
      * 创建用户信息
      */
     private UserVO user;
+
+    /**
+     * 题库里的题目列表（分页）
+     */
+    Page<Question> questionPage;
 
     /**
      * 封装类转对象
