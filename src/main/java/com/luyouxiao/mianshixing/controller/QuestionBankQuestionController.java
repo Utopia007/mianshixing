@@ -45,7 +45,7 @@ public class QuestionBankQuestionController {
     // region 增删改查
 
     /**
-     * 创建题库题目关系
+     * 创建题库题目关联（仅管理员可用）
      *
      * @param questionBankQuestionAddRequest
      * @param request
@@ -72,7 +72,7 @@ public class QuestionBankQuestionController {
     }
 
     /**
-     * 删除题库题目关系
+     * 删除题库题目关联
      *
      * @param deleteRequest
      * @param request
@@ -215,6 +215,7 @@ public class QuestionBankQuestionController {
     @PostMapping("/remove")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> removeQuestionBankQuestion(@RequestBody QuestionBankQuestionRemoveRequest questionBankQuestionRemoveRequest) {
+        // 参数校验
         ThrowUtils.throwIf(questionBankQuestionRemoveRequest == null, ErrorCode.PARAMS_ERROR);
         Long questionBankId = questionBankQuestionRemoveRequest.getQuestionBankId();
         Long questionId = questionBankQuestionRemoveRequest.getQuestionId();
@@ -228,11 +229,4 @@ public class QuestionBankQuestionController {
     }
 
 }
-
-
-
-
-
-
-
 
