@@ -6,6 +6,7 @@ import com.luyouxiao.mianshixing.model.dto.user.UserQueryRequest;
 import com.luyouxiao.mianshixing.model.entity.User;
 import com.luyouxiao.mianshixing.model.vo.LoginUserVO;
 import com.luyouxiao.mianshixing.model.vo.UserVO;
+
 import java.util.List;
 import javax.servlet.http.HttpServletRequest;
 
@@ -107,5 +108,23 @@ public interface UserService extends IService<User> {
      * @return
      */
     QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest);
+
+    /**
+     * 添加用户签到记录
+     *
+     * @param userId 用户 id
+     * @return 当前是否已签到成功
+     */
+    boolean addUserSignIn(long userId);
+
+    /**
+     * 获取用户某个年份的签到记录
+     *
+     * @param userId
+     * @param year
+     * @return 签到记录
+     */
+    List<Integer> getUserSignInRecord(long userId, Integer year);
+
 
 }
