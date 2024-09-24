@@ -10,10 +10,7 @@ import com.luyouxiao.mianshixing.common.ResultUtils;
 import com.luyouxiao.mianshixing.constant.UserConstant;
 import com.luyouxiao.mianshixing.exception.BusinessException;
 import com.luyouxiao.mianshixing.exception.ThrowUtils;
-import com.luyouxiao.mianshixing.model.dto.question.QuestionAddRequest;
-import com.luyouxiao.mianshixing.model.dto.question.QuestionEditRequest;
-import com.luyouxiao.mianshixing.model.dto.question.QuestionQueryRequest;
-import com.luyouxiao.mianshixing.model.dto.question.QuestionUpdateRequest;
+import com.luyouxiao.mianshixing.model.dto.question.*;
 import com.luyouxiao.mianshixing.model.entity.Question;
 import com.luyouxiao.mianshixing.model.entity.User;
 import com.luyouxiao.mianshixing.model.vo.QuestionVO;
@@ -243,5 +240,29 @@ public class QuestionController {
         return ResultUtils.success(true);
     }
 
+    @PostMapping("/search/page/vo")
+    public BaseResponse<Page<QuestionVO>> searchQuestionVOByPage(@RequestBody QuestionQueryRequest questionQueryRequest,
+                                                                 HttpServletRequest request) {
+        long size = questionQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(size > 200, ErrorCode.PARAMS_ERROR);
+        Page<Question> questionPage = questionService.searchFromEs(questionQueryRequest);
+        return ResultUtils.success(questionService.getQuestionVOPage(questionPage, request));
+    }
+
+    /**
+     * 批量删除题目
+     * @param questionBatchDeleteRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/delete/batch")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> batchDeleteQuestions(@RequestBody QuestionBatchDeleteRequest questionBatchDeleteRequest,
+                                                      HttpServletRequest request) {
+        ThrowUtils.throwIf(questionBatchDeleteRequest == null, ErrorCode.PARAMS_ERROR);
+        questionService.batchDeleteQuestions(questionBatchDeleteRequest.getQuestionIdList());
+        return ResultUtils.success(true);
+    }
     // endregion
 }
