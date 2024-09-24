@@ -1,11 +1,14 @@
 package com.luyouxiao.mianshixing.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.luyouxiao.mianshixing.common.ErrorCode;
 import com.luyouxiao.mianshixing.constant.CommonConstant;
+import com.luyouxiao.mianshixing.exception.BusinessException;
 import com.luyouxiao.mianshixing.exception.ThrowUtils;
 import com.luyouxiao.mianshixing.mapper.QuestionBankQuestionMapper;
 import com.luyouxiao.mianshixing.model.dto.questionBankQuestion.QuestionBankQuestionQueryRequest;
@@ -24,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -171,5 +175,65 @@ public class QuestionBankQuestionServiceImpl extends ServiceImpl<QuestionBankQue
         questionBankQuestionVOPage.setRecords(questionBankQuestionVOList);
         return questionBankQuestionVOPage;
     }
+
+    /**
+     * 批量添加题目到题库
+     * @param questionIdList
+     * @param questionBankId
+     * @param loginUser
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchAddQuestionsToBank(List<Long> questionIdList, Long questionBankId, User loginUser) {
+        // 校验参数
+        ThrowUtils.throwIf(CollUtil.isEmpty(questionIdList),ErrorCode.PARAMS_ERROR,"题目列表为空");
+        ThrowUtils.throwIf(questionBankId == null || questionBankId <= 0, ErrorCode.PARAMS_ERROR,"题库非法");
+        ThrowUtils.throwIf(loginUser == null,ErrorCode.NOT_LOGIN_ERROR);
+        // 检查题目id是否存在
+        List<Question> questionList = questionService.listByIds(questionIdList);
+        List<Long> validateQuestionIdList = questionList.stream()
+                .map(Question::getId)
+                .collect(Collectors.toList());
+        ThrowUtils.throwIf(!CollUtil.isEmpty(questionIdList),ErrorCode.PARAMS_ERROR,"题目不存在");
+        // 检查题库是否存在
+        QuestionBank questionBank = questionBankService.getById(questionBankId);
+        ThrowUtils.throwIf(questionBank == null,ErrorCode.NOT_FOUND_ERROR,"题库不存在");
+        // 插入
+        for (Long questionId : validateQuestionIdList) {
+            QuestionBankQuestion questionBankQuestion = new QuestionBankQuestion();
+            questionBankQuestion.setQuestionBankId(questionBankId);
+            questionBankQuestion.setQuestionId(questionId);
+            questionBankQuestion.setUserId(loginUser.getId());
+            boolean result = this.save(questionBankQuestion);
+            if (!result) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR,"添加题目到题库失败");
+            }
+
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void batchRemoveQuestionsFromBank(List<Long> questionIdList, Long questionBankId) {
+        // 参数校验
+        ThrowUtils.throwIf(CollUtil.isEmpty(questionIdList), ErrorCode.PARAMS_ERROR, "题目列表为空");
+        ThrowUtils.throwIf(questionBankId == null || questionBankId <= 0, ErrorCode.PARAMS_ERROR, "题库非法");
+        // 执行删除关联
+        for (Long questionId : questionIdList) {
+            // 构造查询
+            LambdaQueryWrapper<QuestionBankQuestion> lambdaQueryWrapper = Wrappers.lambdaQuery(QuestionBankQuestion.class)
+                    .eq(QuestionBankQuestion::getQuestionId, questionId)
+                    .eq(QuestionBankQuestion::getQuestionBankId, questionBankId);
+            boolean result = this.remove(lambdaQueryWrapper);
+            if (!result) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "从题库移除题目失败");
+            }
+        }
+    }
+
+
+
+
+
 
 }
