@@ -1,0 +1,11 @@
+项目启动地址：
+
+项目 swagger 文档地址：http://localhost:8101/api/doc.html#/home
+
+Druid启动地址：
+
+项目启动需要的组件:
+    - mysql
+    - redis
+    - elashticsearch
+    - kibana(可视化，非必须)
