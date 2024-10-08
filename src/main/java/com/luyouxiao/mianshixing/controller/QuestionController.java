@@ -1,18 +1,27 @@
 package com.luyouxiao.mianshixing.controller;
 
 import cn.hutool.json.JSONUtil;
+import com.alibaba.csp.sentinel.Entry;
+import com.alibaba.csp.sentinel.EntryType;
+import com.alibaba.csp.sentinel.SphU;
+import com.alibaba.csp.sentinel.Tracer;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
+import com.alibaba.csp.sentinel.slots.block.degrade.DegradeException;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.luyouxiao.mianshixing.annotation.AuthCheck;
 import com.luyouxiao.mianshixing.common.BaseResponse;
 import com.luyouxiao.mianshixing.common.DeleteRequest;
 import com.luyouxiao.mianshixing.common.ErrorCode;
 import com.luyouxiao.mianshixing.common.ResultUtils;
+import com.luyouxiao.mianshixing.constant.SentinelConstant;
 import com.luyouxiao.mianshixing.constant.UserConstant;
 import com.luyouxiao.mianshixing.exception.BusinessException;
 import com.luyouxiao.mianshixing.exception.ThrowUtils;
 import com.luyouxiao.mianshixing.model.dto.question.*;
+import com.luyouxiao.mianshixing.model.dto.questionBank.QuestionBankQueryRequest;
 import com.luyouxiao.mianshixing.model.entity.Question;
 import com.luyouxiao.mianshixing.model.entity.User;
+import com.luyouxiao.mianshixing.model.vo.QuestionBankVO;
 import com.luyouxiao.mianshixing.model.vo.QuestionVO;
 import com.luyouxiao.mianshixing.service.QuestionService;
 import com.luyouxiao.mianshixing.service.UserService;
@@ -182,6 +191,42 @@ public class QuestionController {
         return ResultUtils.success(questionService.getQuestionVOPage(questionPage, request));
     }
 
+    @PostMapping("/list/page/vo/sentinel")
+    public BaseResponse<Page<QuestionVO>> listQuestionVOByPageSentinel(@RequestBody QuestionQueryRequest questionQueryRequest,
+                                                                       HttpServletRequest request) {
+        ThrowUtils.throwIf(questionQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        long size = questionQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
+        // 基于 IP 限流
+        String remoteAddr = request.getRemoteAddr();
+        Entry entry = null;
+        try {
+            entry = SphU.entry(SentinelConstant.listQuestionVOByPageSentinel, EntryType.IN, 1, remoteAddr);
+            // 被保护的业务逻辑
+            // 查询数据库
+            Page<Question> questionPage = questionService.listQuestionByPage(questionQueryRequest);
+            // 获取封装类
+            return ResultUtils.success(questionService.getQuestionVOPage(questionPage, request));
+        } catch (Throwable ex) {
+            // 业务异常
+            if (!BlockException.isBlockException(ex)) {
+                Tracer.trace(ex);
+                return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "系统错误111");
+            }
+            // 降级操作
+            if (ex instanceof DegradeException) {
+                return handleFallback(questionQueryRequest, request, ex);
+            }
+            // 限流操作
+            return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "访问过于频繁，请稍后再试");
+        } finally {
+            if (entry != null) {
+                entry.exit(1, remoteAddr);
+            }
+        }
+    }
+
     /**
      * 分页获取当前登录用户创建的题目列表
      *
@@ -264,5 +309,22 @@ public class QuestionController {
         questionService.batchDeleteQuestions(questionBatchDeleteRequest.getQuestionIdList());
         return ResultUtils.success(true);
     }
+
     // endregion
+
+    /**
+     * 降级操作
+     *
+     * @param questionQueryRequest
+     * @param request
+     * @param ex
+     * @return
+     */
+    public BaseResponse<Page<QuestionVO>> handleFallback(@RequestBody QuestionQueryRequest questionQueryRequest,
+                                                             HttpServletRequest request,
+                                                             Throwable ex) {
+        // 此处返回空数据
+        return ResultUtils.success(null);
+    }
+
 }

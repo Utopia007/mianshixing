@@ -1,6 +1,10 @@
 package com.luyouxiao.mianshixing.controller;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
+import com.alibaba.csp.sentinel.slots.block.degrade.DegradeException;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.jd.platform.hotkey.client.callback.JdHotKeyStore;
 import com.luyouxiao.mianshixing.annotation.AuthCheck;
 import com.luyouxiao.mianshixing.common.BaseResponse;
 import com.luyouxiao.mianshixing.common.DeleteRequest;
@@ -141,6 +145,17 @@ public class QuestionBankController {
         ThrowUtils.throwIf(questionBankQueryRequest == null, ErrorCode.PARAMS_ERROR);
         Long id = questionBankQueryRequest.getId();
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
+        // 生成key
+        String key = "bank_detail_" + id;
+        // 如果是热key
+        if (JdHotKeyStore.isHotKey(key)) {
+            // 从本地缓存中获取值
+            Object cacheQuestionBankVO = JdHotKeyStore.get(key);
+            if (cacheQuestionBankVO != null){
+                return ResultUtils.success((QuestionBankVO) cacheQuestionBankVO);
+            }
+        }
+
         // 查询数据库
         QuestionBank questionBank = questionBankService.getById(id);
         ThrowUtils.throwIf(questionBank == null, ErrorCode.NOT_FOUND_ERROR);
@@ -154,6 +169,10 @@ public class QuestionBankController {
             Page<Question> questionPage = questionService.listQuestionByPage(questionQueryRequest);
             questionBankVO.setQuestionPage(questionPage);
         }
+
+        // 设置本地缓存
+        JdHotKeyStore.smartSet(key, questionBankVO);
+
         // 获取封装类
         return ResultUtils.success(questionBankVO);
     }
@@ -177,12 +196,18 @@ public class QuestionBankController {
 
     /**
      * 分页获取题库列表（封装类）
+     * <p>
+     * blockHandler 处理 Sentinel 流量控制异常，如 BlockException。
+     * fallback 处理业务逻辑中的异常，比如我们自己的 BusinessException。
      *
      * @param questionBankQueryRequest
      * @param request
      * @return
      */
     @PostMapping("/list/page/vo")
+    @SentinelResource(value = "listQuestionBankVOByPage",
+            blockHandler = "handleBlockException",
+            fallback = "handleFallback")
     public BaseResponse<Page<QuestionBankVO>> listQuestionBankVOByPage(@RequestBody QuestionBankQueryRequest questionBankQueryRequest,
                                                                HttpServletRequest request) {
         long current = questionBankQueryRequest.getCurrent();
@@ -255,4 +280,43 @@ public class QuestionBankController {
     }
 
     // endregion
+
+    /**
+     * 降级操作
+     *
+     * @param questionBankQueryRequest
+     * @param request
+     * @param ex
+     * @return
+     */
+    public BaseResponse<Page<QuestionBankVO>> handleFallback(@RequestBody QuestionBankQueryRequest questionBankQueryRequest,
+                                                             HttpServletRequest request,
+                                                             Throwable ex) {
+        // 此处返回空数据
+        return ResultUtils.success(null);
+    }
+
+    /**
+     * 流控操作
+     * 限流：提示“系统压力过大，请耐心等待”
+     * 熔断：执行降级操作
+     * @param questionBankQueryRequest
+     * @param request
+     * @param ex
+     * @return
+     */
+    public BaseResponse<Page<QuestionBankVO>> handleBlockException(@RequestBody QuestionBankQueryRequest questionBankQueryRequest,
+                                                                   HttpServletRequest request,
+                                                                   BlockException ex) {
+        // 降级操作【如果 blockHandler 和 fallbackHandler 同时配置，当熔断器打开后，仍然会进入 blockHandler 进行处理，
+        // 因此需要在该方法中处理因为熔断触发的降级逻辑】
+        if (ex instanceof DegradeException) {
+            return handleFallback(questionBankQueryRequest, request, ex);
+        }
+
+        // 限流操作
+        return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "系统压力过大，请稍候");
+    }
+
+
 }

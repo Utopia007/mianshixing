@@ -1,11 +1,30 @@
-项目启动地址：
+项目启动地址：http://localhost:3000/
 
 项目 swagger 文档地址：http://localhost:8101/api/doc.html#/home
 
-Druid启动地址：
+Druid面板：http://localhost:8101/api/druid/index.html
+- username: root
+- password: 123
+
+hotKey（hotKey启动所需：etcd）
+    面板dashbord：8121
+        - username：admin
+        - password：123456
+    worker：8111
+
+sentinel
+    控制台：(启动时需要添加jvm参数：-Dcsp.sentinel.dashboard.server=localhost:8131【指定控制台的地址和端口】)
+        启动：java -Dserver.port=8131 -jar sentinel-dashboard-1.8.6.jar
+        面板：http://localhost:8131/#/dashboard
+            - username: sentinel
+            - password: sentinel
+
 
 项目启动需要的组件:
-    - mysql
-    - redis
-    - elashticsearch
-    - kibana(可视化，非必须)
+    - mysql 3306
+    - redis 6379
+    - elasticSearch 9300
+    - kibana(es可视化，非必须)
+    - etcd 2379
+    - hotkey 8111[启动worker] 8121[启动dashboard] netty长连接(hotkey中用到) 11111
+    - sentinel
