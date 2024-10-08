@@ -19,6 +19,10 @@ sentinel
             - username: sentinel
             - password: sentinel
 
+nacos
+    控制台：http://127.0.0.1:8848/nacos
+        - username
+        - password
 
 项目启动需要的组件:
     - mysql 3306
@@ -28,3 +32,6 @@ sentinel
     - etcd 2379
     - hotkey 8111[启动worker] 8121[启动dashboard] netty长连接(hotkey中用到) 11111
     - sentinel
+    - nacos 8848
+
+启动【面试星】项目需要启动组件：es，hotkey的worker和dashboard（前置需要启动etcd），sentinel的jar包，nacos
