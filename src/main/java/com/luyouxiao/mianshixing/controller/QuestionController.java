@@ -1,6 +1,7 @@
 package com.luyouxiao.mianshixing.controller;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.json.JSONUtil;
 import com.alibaba.csp.sentinel.Entry;
 import com.alibaba.csp.sentinel.EntryType;
@@ -18,6 +19,7 @@ import com.luyouxiao.mianshixing.constant.SentinelConstant;
 import com.luyouxiao.mianshixing.constant.UserConstant;
 import com.luyouxiao.mianshixing.exception.BusinessException;
 import com.luyouxiao.mianshixing.exception.ThrowUtils;
+import com.luyouxiao.mianshixing.manager.CounterManager;
 import com.luyouxiao.mianshixing.model.dto.question.*;
 import com.luyouxiao.mianshixing.model.dto.questionBank.QuestionBankQueryRequest;
 import com.luyouxiao.mianshixing.model.entity.Question;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 题目接口
@@ -48,6 +51,9 @@ public class QuestionController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private CounterManager counterManager;
 
     // region 增删改查
 
@@ -149,7 +155,12 @@ public class QuestionController {
      */
     @GetMapping("/get/vo")
     public BaseResponse<QuestionVO> getQuestionVOById(long id, HttpServletRequest request) {
+        System.out.println("request = " + request);
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
+        // 检测 处置爬虫
+        User loginUser = userService.getLoginUser(request);
+//        User loginUser = userService.getLoginUserPermitNull(request);
+        crawlerDetect(loginUser.getId());
         // 查询数据库
         Question question = questionService.getById(id);
         ThrowUtils.throwIf(question == null, ErrorCode.NOT_FOUND_ERROR);
@@ -326,6 +337,37 @@ public class QuestionController {
                                                              Throwable ex) {
         // 此处返回空数据
         return ResultUtils.success(null);
+    }
+
+    /**
+     * 检测爬虫
+     * @param loginUserId
+     */
+    public void crawlerDetect(long loginUserId) {
+        // 调用多少次时告警
+        final int WARN_COUNT = 10;
+        // 超过多少次时封号
+        final int BAN_COUNT = 30;
+        // 拼接访问 key
+        String key = String.format("user:access:%s", loginUserId);
+        // 检测一分钟内的访问次数，180秒过期
+        long count = counterManager.incrAndGetCounter(key, 180, TimeUnit.SECONDS);
+        // 是否封号
+        if (count > BAN_COUNT) {
+            // 踢下线
+            StpUtil.kickout(loginUserId);
+            // 封号
+            User updateUser = new User();
+            updateUser.setId(loginUserId);
+            updateUser.setUserRole(UserConstant.BAN_ROLE);
+            userService.updateById(updateUser);
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "访问过于频繁，已封号，有疑问请联系管理员");
+        }
+        if (count == WARN_COUNT) {
+            log.warn("用户 {} 爬虫访问次数过多，当前次数为 {}", loginUserId, count);
+            throw new BusinessException(40110, "访问过于频繁，警告 1 次");
+        }
+
     }
 
 }
