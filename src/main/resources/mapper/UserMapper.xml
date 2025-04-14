@@ -13,12 +13,19 @@
         <result property="userRole" column="userRole" jdbcType="VARCHAR"/>
         <result property="createTime" column="createTime" jdbcType="TIMESTAMP"/>
         <result property="updateTime" column="updateTime" jdbcType="TIMESTAMP"/>
+        <result property="phoneNumber" column="phoneNumber" jdbcType="VARCHAR"/>
+        <result property="email" column="email" jdbcType="VARCHAR"/>
+        <result property="grade" column="grade" jdbcType="VARCHAR"/>
+        <result property="workExperience" column="workExperience" jdbcType="VARCHAR"/>
+        <result property="expertiseDirection" column="expertiseDirection" jdbcType="VARCHAR"/>
         <result property="isDelete" column="isDelete" jdbcType="TINYINT"/>
     </resultMap>
 
     <sql id="Base_Column_List">
         id,unionId,mpOpenId,
         userName,userAvatar,userProfile,
-        userRole,createTime,updateTime,isDelete
+        userRole,createTime,updateTime,isDelete,
+        isDelete,phoneNumber,email,
+        grade,workExperience,expertiseDirection
     </sql>
 </mapper>

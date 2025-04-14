@@ -1,6 +1,7 @@
 package com.luyouxiao.mianshixing.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -11,6 +12,7 @@ import com.luyouxiao.mianshixing.common.ErrorCode;
 import com.luyouxiao.mianshixing.constant.CommonConstant;
 import com.luyouxiao.mianshixing.exception.BusinessException;
 import com.luyouxiao.mianshixing.exception.ThrowUtils;
+import com.luyouxiao.mianshixing.manager.AiManager;
 import com.luyouxiao.mianshixing.mapper.QuestionMapper;
 import com.luyouxiao.mianshixing.model.dto.question.QuestionEsDTO;
 import com.luyouxiao.mianshixing.model.dto.question.QuestionQueryRequest;
@@ -32,6 +34,8 @@ import org.elasticsearch.search.sort.ScoreSortBuilder;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 import org.springframework.data.elasticsearch.core.SearchHit;
@@ -40,6 +44,7 @@ import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.jsf.FacesContextUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -55,12 +60,12 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
 
     @Resource
     private UserService userService;
-
     @Resource
     private QuestionBankQuestionService questionBankQuestionService;
-
     @Resource
     private ElasticsearchRestTemplate elasticsearchRestTemplate;
+    @Resource
+    private AiManager aiManager;
 
     /**
      * 校验数据
@@ -101,7 +106,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         if (questionQueryRequest == null) {
             return queryWrapper;
         }
-        // todo 从对象中取值
+        // 从对象中取值
         Long id = questionQueryRequest.getId();
         Long notId = questionQueryRequest.getNotId();
         String title = questionQueryRequest.getTitle();
@@ -152,7 +157,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         QuestionVO questionVO = QuestionVO.objToVo(question);
 
         // todo 可以根据需要为封装对象补充值，不需要的内容可以删除
-        // region 可选
+        // region
         // 1. 关联查询用户信息
         Long userId = question.getUserId();
         User user = null;
@@ -342,6 +347,75 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         }
     }
 
+    /**
+     * AI 生成题目
+     * @param questionType 题目类型，比如 Java
+     * @param number 题目数量，比如 10
+     * @param user 创建人
+     * @return ture / false
+     */
+    @Override
+    public boolean aiGenerateQuestions(String questionType, int number, User user) {
+        if (ObjectUtil.hasEmpty(questionType, number, user)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数错误");
+        }
+        // 1、定义systemPrompt
+        String systemPrompt = "你是一位专业的程序员面试官，你要生成 {数量} 道 {方向} 面试题，要求输出格式如下：\n" +
+                "\n" +
+                "1. 什么是 Java 中的反射？\n" +
+                "2. Java 8 中的 Stream API 有什么作用？\n" +
+                "3. xxxxxx\n" +
+                "\n" +
+                "除此之外，不要输出任何多余的内容，不要输出开头、也不要输出结尾，只输出题目列表。\n" +
+                "\n" +
+                "接下来我会给你要生成的题目{数量}、以及题目{方向}\n";
+        // 2、拼接userPrompt
+        String userPrompt = String.format("题目数量: %s, 题目方向: %s", number, questionType);
+        // 3、调用AI生成题目
+        String aiResponse = aiManager.doChat(systemPrompt, userPrompt);
+        // 4、对题目进行清洗
+        List<String> lines = Arrays.asList(aiResponse.split("\n"));
+        List<String> titleList = lines.stream().map(line -> StrUtil.removePrefix(line, StrUtil.subBefore(line, " ", false)))
+                .map(line -> line.replace("`", ""))
+                .collect(Collectors.toList());
+        // 5、保存题目到数据库
+        List<Question> aiQuestionList = titleList.stream().map(title -> {
+            Question question = new Question();
+            question.setTitle(title);
+            question.setUserId(user.getId());
+            question.setTags("[\"待审核\"]");
+            question.setAnswer(aiGenerateQuestionAnswer(title));
+            return question;
+        }).collect(Collectors.toList());
+        boolean result = this.saveBatch(aiQuestionList);
+        if (!result) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "AI生成题目失败");
+        }
+        return true;
+    }
+
+    /**
+     * AI 生成题解
+     *
+     * @param questionTitle
+     * @return
+     */
+    private String aiGenerateQuestionAnswer(String questionTitle) {
+        // 1. 定义系统 Prompt
+        String systemPrompt = "你是一位专业的程序员面试官，我会给你一道面试题，请帮我生成详细的面试题解。要求如下：\n" +
+                "\n" +
+                "1. 题解的语句要自然流畅\n" +
+                "2. 题解可以先给出总结性的回答，再详细解释\n" +
+                "3. 要使用 Markdown 语法输出\n" +
+                "\n" +
+                "注意：除了题解本身外，不要输出任何多余的内容，不要输出开头、也不要输出结尾，只输出题解。\n" +
+                "\n" +
+                "接下来我会给你要生成的面试题";
+        // 2. 拼接用户 Prompt
+        String userPrompt = String.format("面试题：%s", questionTitle);
+        // 3. 调用 AI 生成题解
+        return aiManager.doChat(systemPrompt, userPrompt);
+    }
 
 
 }

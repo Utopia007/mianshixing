@@ -10,12 +10,7 @@ import com.luyouxiao.mianshixing.common.ResultUtils;
 import com.luyouxiao.mianshixing.constant.UserConstant;
 import com.luyouxiao.mianshixing.exception.BusinessException;
 import com.luyouxiao.mianshixing.exception.ThrowUtils;
-import com.luyouxiao.mianshixing.model.dto.user.UserAddRequest;
-import com.luyouxiao.mianshixing.model.dto.user.UserLoginRequest;
-import com.luyouxiao.mianshixing.model.dto.user.UserQueryRequest;
-import com.luyouxiao.mianshixing.model.dto.user.UserRegisterRequest;
-import com.luyouxiao.mianshixing.model.dto.user.UserUpdateMyRequest;
-import com.luyouxiao.mianshixing.model.dto.user.UserUpdateRequest;
+import com.luyouxiao.mianshixing.model.dto.user.*;
 import com.luyouxiao.mianshixing.model.entity.User;
 import com.luyouxiao.mianshixing.model.vo.LoginUserVO;
 import com.luyouxiao.mianshixing.model.vo.UserVO;
@@ -135,7 +130,7 @@ public class UserController {
      * @return
      */
     @PostMapping("/add")
-    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> addUser(@RequestBody UserAddRequest userAddRequest, HttpServletRequest request) {
         if (userAddRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -159,7 +154,7 @@ public class UserController {
      * @return
      */
     @PostMapping("/delete")
-    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -176,7 +171,7 @@ public class UserController {
      * @return
      */
     @PostMapping("/update")
-    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> updateUser(@RequestBody UserUpdateRequest userUpdateRequest,
             HttpServletRequest request) {
         if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
@@ -197,7 +192,7 @@ public class UserController {
      * @return
      */
     @GetMapping("/get")
-    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<User> getUserById(long id, HttpServletRequest request) {
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -229,7 +224,7 @@ public class UserController {
      * @return
      */
     @PostMapping("/list/page")
-    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Page<User>> listUserByPage(@RequestBody UserQueryRequest userQueryRequest,
             HttpServletRequest request) {
         long current = userQueryRequest.getCurrent();
@@ -263,6 +258,27 @@ public class UserController {
         userVOPage.setRecords(userVO);
         return ResultUtils.success(userVOPage);
     }
+
+    /**
+     * 编辑用户信息
+     * @param userEditRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/edit")
+    public BaseResponse<Boolean> editUser(@RequestBody UserEditRequest userEditRequest, HttpServletRequest request) {
+        if (userEditRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        User user = new User();
+        BeanUtils.copyProperties(userEditRequest, user);
+        user.setId(loginUser.getId());
+        boolean res = userService.updateById(user);
+        ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR);
+        return ResultUtils.success(true);
+    }
+
 
     // endregion
 
